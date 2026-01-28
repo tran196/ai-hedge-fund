@@ -80,6 +80,17 @@ FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
 
 **Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work. 
 
+### 🤖 Claude Integration (Recommended)
+
+The AI Hedge Fund includes intelligent **tiered model selection** for Claude models:
+- **OPUS**: Complex analysis (famous investor agents like Warren Buffett, Charlie Munger)
+- **SONNET**: Balanced performance (analysis agents, portfolio management)
+- **HAIKU**: Quick decisions and cost optimization
+
+Simply set your `ANTHROPIC_API_KEY` and the system will automatically assign the appropriate model tier to each agent.
+
+See [docs/CLAUDE_INTEGRATION.md](docs/CLAUDE_INTEGRATION.md) for full details.
+
 **Financial Data**: Data for AAPL, GOOGL, MSFT, NVDA, and TSLA is free and does not require an API key. For any other ticker, you will need to set the `FINANCIAL_DATASETS_API_KEY` in the .env file.
 
 ## How to Run
