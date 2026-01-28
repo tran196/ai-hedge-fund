@@ -48,6 +48,7 @@ By using this software, you agree to use it solely for learning purposes.
   - [🖥️ Web Application](#️-web-application)
 - [How to Contribute](#how-to-contribute)
 - [Feature Requests](#feature-requests)
+- [Troubleshooting](#troubleshooting)
 - [License](#license)
 
 ## How to Install
@@ -80,14 +81,34 @@ FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
 
 **Important**: You must set at least one LLM API key (e.g. `OPENAI_API_KEY`, `GROQ_API_KEY`, `ANTHROPIC_API_KEY`, or `DEEPSEEK_API_KEY`) for the hedge fund to work. 
 
-### 🤖 Claude Integration (Recommended)
+### 🤖 Claude Code CLI Integration (Recommended)
 
-The AI Hedge Fund includes intelligent **tiered model selection** for Claude models:
-- **OPUS**: Complex analysis (famous investor agents like Warren Buffett, Charlie Munger)
-- **SONNET**: Balanced performance (analysis agents, portfolio management)
-- **HAIKU**: Quick decisions and cost optimization
+**NEW:** Use Claude with your existing **Claude Pro subscription** - no API key required!
 
-Simply set your `ANTHROPIC_API_KEY` and the system will automatically assign the appropriate model tier to each agent.
+The AI Hedge Fund integrates with **Claude Code CLI**, allowing you to leverage Claude's powerful models directly through your subscription:
+
+```bash
+# Install Claude Code CLI
+npm install -g @anthropic-ai/claude-code
+
+# Run with Claude (auto-selects model tiers)
+poetry run python src/main.py --ticker AAPL,NVDA,TSLA
+# Select "Claude Sonnet 4" from the menu
+```
+
+**Intelligent Model Tiering:**
+| Tier | Agents | Use Case |
+|------|--------|----------|
+| **OPUS** | Warren Buffett, Charlie Munger, Ben Graham, Peter Lynch | Deep investment reasoning |
+| **SONNET** | Valuation, Risk Management, Portfolio Manager | Balanced analysis |
+| **HAIKU** | Quick lookups, simple decisions | Cost optimization |
+
+**Features:**
+- ✅ No API key required (uses your Claude subscription)
+- 🎨 Rich terminal output with ASCII charts and colored confidence bars
+- 📊 Agent vote distribution visualization
+- 🏆 Backtesting comparison with ranked accuracy
+- ⏱️ Performance timing metrics
 
 See [docs/CLAUDE_INTEGRATION.md](docs/CLAUDE_INTEGRATION.md) for full details.
 
@@ -163,6 +184,53 @@ Please see detailed instructions on how to install and run the web application [
 ## Feature Requests
 
 If you have a feature request, please open an [issue](https://github.com/virattt/ai-hedge-fund/issues) and make sure it is tagged with `enhancement`.
+
+## Troubleshooting
+
+### Claude Code CLI Issues
+
+**"claude: command not found"**
+```bash
+# Ensure Claude Code CLI is installed globally
+npm install -g @anthropic-ai/claude-code
+
+# Verify installation
+claude --version
+```
+
+**Authentication Issues**
+- Claude Code CLI uses your browser-based Claude authentication
+- Make sure you're logged into Claude in your default browser
+- Try `claude --help` to verify CLI is working
+
+**Timeout Errors**
+- Complex analyses with multiple agents can take 2-3 minutes
+- The system shows progress indicators for each agent
+- Consider using fewer tickers for faster results
+
+### Python Environment
+
+**Poetry not found**
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+**Dependency conflicts**
+```bash
+# Clear and reinstall dependencies
+rm -rf .venv poetry.lock
+poetry install
+```
+
+**Python version**
+- Requires Python 3.11 or higher
+- Check with `python --version`
+
+### Financial Data
+
+**"No data available for ticker"**
+- Free data is only available for: AAPL, GOOGL, MSFT, NVDA, TSLA
+- For other tickers, set `FINANCIAL_DATASETS_API_KEY` in `.env`
 
 ## License
 

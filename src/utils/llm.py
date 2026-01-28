@@ -8,10 +8,12 @@ This module provides LLM calling utilities with support for:
 
 import json
 import os
+
 from pydantic import BaseModel
+
+from src.graph.state import AgentState
 from src.llm.models import get_model, get_model_info, ModelProvider
 from src.utils.progress import progress
-from src.graph.state import AgentState
 
 
 def call_llm(
@@ -24,7 +26,7 @@ def call_llm(
 ) -> BaseModel:
     """
     Makes an LLM call with retry logic.
-    
+
     Priority order:
     1. Claude Code CLI (if available and provider is Anthropic/Claude/ClaudeCode)
     2. Anthropic API (if ANTHROPIC_API_KEY is set)
@@ -41,16 +43,16 @@ def call_llm(
     Returns:
         An instance of the specified Pydantic model
     """
-    
+
     # Extract model configuration
     if state and agent_name:
         model_name, model_provider = get_agent_model_config(state, agent_name)
     else:
         model_name, model_provider = get_default_model(agent_name)
-    
+
     # Check if we should use Claude Code CLI
     use_claude_code = should_use_claude_code(model_provider)
-    
+
     if use_claude_code:
         return call_llm_claude_code(
             prompt=prompt,
@@ -76,32 +78,32 @@ def call_llm(
 def should_use_claude_code(model_provider: str) -> bool:
     """
     Determine if Claude Code CLI should be used.
-    
+
     Returns True if:
     1. Provider is Claude/Anthropic/ClaudeCode AND
     2. Claude Code CLI is available AND
     3. No ANTHROPIC_API_KEY is set (prefer CLI over API)
     """
     from src.llm.claude_code import is_claude_code_available
-    
+
     provider_upper = str(model_provider).upper()
     is_claude_provider = provider_upper in ("ANTHROPIC", "CLAUDE", "CLAUDECODE", "CLAUDE_CODE")
-    
+
     if not is_claude_provider:
         return False
-    
+
     if not is_claude_code_available():
         return False
-    
+
     # If API key is set, user might want API instead of CLI
     # But we prefer CLI for Pro subscription usage
     # Only use API if explicitly set and CLI is not preferred
     api_key = os.getenv("ANTHROPIC_API_KEY")
     use_api_key = os.getenv("USE_ANTHROPIC_API", "").lower() == "true"
-    
+
     if api_key and use_api_key:
         return False
-    
+
     return True
 
 
@@ -116,31 +118,28 @@ def call_llm_claude_code(
     """Call LLM using Claude Code CLI."""
     from src.llm.claude_code import (
         call_claude_code_structured,
-        get_model_for_agent,
         create_default_response,
+        get_model_for_agent,
     )
-    
+
     # Get appropriate model tier for agent
     model_tier = get_model_for_agent(agent_name) if agent_name else "sonnet"
-    
+
     # Extract the text content from the prompt
-    if hasattr(prompt, 'messages'):
+    if hasattr(prompt, "messages"):
         # LangChain ChatPromptValue
         messages = prompt.messages
-        prompt_text = "\n\n".join([
-            f"{getattr(m, 'type', 'user').upper()}: {m.content}" 
-            for m in messages
-        ])
-    elif hasattr(prompt, 'to_string'):
+        prompt_text = "\n\n".join([f"{getattr(m, 'type', 'user').upper()}: {m.content}" for m in messages])
+    elif hasattr(prompt, "to_string"):
         prompt_text = prompt.to_string()
     elif isinstance(prompt, str):
         prompt_text = prompt
     else:
         prompt_text = str(prompt)
-    
+
     if agent_name:
         progress.update_status(agent_name, None, f"Calling Claude ({model_tier})")
-    
+
     try:
         result = call_claude_code_structured(
             prompt=prompt_text,
@@ -153,7 +152,7 @@ def call_llm_claude_code(
         if agent_name:
             progress.update_status(agent_name, None, f"Error: {str(e)[:50]}")
         print(f"Error in Claude Code call: {e}")
-        
+
         if default_factory:
             return default_factory()
         return create_default_response(pydantic_model, str(e))
@@ -170,12 +169,12 @@ def call_llm_langchain(
     default_factory=None,
 ) -> BaseModel:
     """Call LLM using LangChain (for Anthropic API, OpenAI, etc.)."""
-    
+
     # Extract API keys from state if available
     api_keys = None
     if state:
         request = state.get("metadata", {}).get("request")
-        if request and hasattr(request, 'api_keys'):
+        if request and hasattr(request, "api_keys"):
             api_keys = request.api_keys
 
     model_info = get_model_info(model_name, model_provider)
@@ -193,7 +192,7 @@ def call_llm_langchain(
         try:
             if agent_name:
                 progress.update_status(agent_name, None, f"Calling {model_provider}")
-            
+
             # Call the LLM
             result = llm.invoke(prompt)
 
@@ -221,27 +220,28 @@ def call_llm_langchain(
 def get_default_model(agent_name: str | None = None) -> tuple[str, str]:
     """
     Get the default model based on available providers.
-    
+
     Priority:
     1. Claude Code CLI (if available)
     2. Anthropic API (if ANTHROPIC_API_KEY is set)
     3. OpenAI (fallback)
     """
-    from src.llm.claude_code import is_claude_code_available, get_model_for_agent
-    
+    from src.llm.claude_code import get_model_for_agent, is_claude_code_available
+
     # Check Claude Code CLI first
     if is_claude_code_available():
         model_tier = get_model_for_agent(agent_name) if agent_name else "sonnet"
         return model_tier, "ClaudeCode"
-    
+
     # Check Anthropic API key
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if api_key and api_key != "your-anthropic-api-key":
         from src.llm.claude_config import get_claude_model_for_agent
+
         if agent_name:
             return get_claude_model_for_agent(agent_name)
         return "claude-sonnet-4-20250514", "Anthropic"
-    
+
     # Fall back to OpenAI
     return "gpt-4.1", "OpenAI"
 
@@ -252,22 +252,22 @@ def get_agent_model_config(state, agent_name):
     Falls back to global model configuration if agent-specific config is not available.
     When using Claude, automatically selects the appropriate tier for each agent.
     """
-    from src.llm.claude_code import is_claude_code_available, get_model_for_agent
-    
+    from src.llm.claude_code import get_model_for_agent, is_claude_code_available
+
     request = state.get("metadata", {}).get("request")
-    
-    if request and hasattr(request, 'get_agent_model_config'):
+
+    if request and hasattr(request, "get_agent_model_config"):
         model_name, model_provider = request.get_agent_model_config(agent_name)
         if model_name and model_provider:
-            return model_name, model_provider.value if hasattr(model_provider, 'value') else str(model_provider)
-    
+            return model_name, model_provider.value if hasattr(model_provider, "value") else str(model_provider)
+
     # Fall back to global configuration from metadata
     model_name = state.get("metadata", {}).get("model_name")
     model_provider = state.get("metadata", {}).get("model_provider")
-    
+
     # Normalize provider
     provider_str = str(model_provider).upper() if model_provider else ""
-    
+
     # If using Claude (via CLI or API) and we have an agent name, use tiered selection
     if provider_str in ("ANTHROPIC", "CLAUDE", "CLAUDECODE", "CLAUDE_CODE"):
         if is_claude_code_available():
@@ -275,14 +275,15 @@ def get_agent_model_config(state, agent_name):
             return model_tier, "ClaudeCode"
         else:
             from src.llm.claude_config import get_claude_model_for_agent
+
             return get_claude_model_for_agent(agent_name)
-    
+
     # Use explicit config if provided
     if model_name and model_provider:
-        if hasattr(model_provider, 'value'):
+        if hasattr(model_provider, "value"):
             model_provider = model_provider.value
         return model_name, model_provider
-    
+
     # Fall back to defaults
     return get_default_model(agent_name)
 

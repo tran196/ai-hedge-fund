@@ -9,9 +9,10 @@ These tests verify that each agent:
 """
 
 import json
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from src.graph.state import AgentState
 
@@ -20,7 +21,7 @@ def create_mock_state(tickers=None, model_provider="Anthropic"):
     """Create a mock state for testing agents."""
     if tickers is None:
         tickers = ["AAPL"]
-    
+
     return {
         "messages": [],
         "data": {
@@ -44,16 +45,14 @@ def create_mock_state(tickers=None, model_provider="Anthropic"):
 class TestWarrenBuffettAgent:
     """Tests for the Warren Buffett agent."""
 
-    @patch('src.agents.warren_buffett.call_llm')
-    @patch('src.agents.warren_buffett.get_financial_metrics')
-    @patch('src.agents.warren_buffett.search_line_items')
-    @patch('src.agents.warren_buffett.get_market_cap')
-    def test_warren_buffett_agent_bullish(
-        self, mock_market_cap, mock_line_items, mock_metrics, mock_call_llm
-    ):
+    @patch("src.agents.warren_buffett.call_llm")
+    @patch("src.agents.warren_buffett.get_financial_metrics")
+    @patch("src.agents.warren_buffett.search_line_items")
+    @patch("src.agents.warren_buffett.get_market_cap")
+    def test_warren_buffett_agent_bullish(self, mock_market_cap, mock_line_items, mock_metrics, mock_call_llm):
         """Test Warren Buffett agent returns bullish signal."""
         from src.agents.warren_buffett import warren_buffett_agent, WarrenBuffettSignal
-        
+
         # Mock financial data with all required attributes
         mock_metric = Mock()
         mock_metric.return_on_equity = 0.25
@@ -64,7 +63,7 @@ class TestWarrenBuffettAgent:
         mock_metric.asset_turnover = 1.2  # Need actual float for comparison
         mock_metric.model_dump.return_value = {}
         mock_metrics.return_value = [mock_metric] * 10
-        
+
         # Mock line items
         mock_item = Mock()
         mock_item.net_income = 1000000000
@@ -79,52 +78,42 @@ class TestWarrenBuffettAgent:
         mock_item.issuance_or_purchase_of_equity_shares = -100000000
         mock_item.working_capital = 200000000
         mock_line_items.return_value = [mock_item] * 10
-        
+
         mock_market_cap.return_value = 2000000000000
-        
+
         # Mock LLM response
-        mock_call_llm.return_value = WarrenBuffettSignal(
-            signal="bullish",
-            confidence=85,
-            reasoning="Strong ROE, low debt, excellent moat characteristics"
-        )
-        
+        mock_call_llm.return_value = WarrenBuffettSignal(signal="bullish", confidence=85, reasoning="Strong ROE, low debt, excellent moat characteristics")
+
         state = create_mock_state()
         result = warren_buffett_agent(state)
-        
+
         assert "messages" in result
         assert "data" in result
-        
+
         # Verify the signal was stored
         signals = result["data"]["analyst_signals"]
         assert "warren_buffett_agent" in signals
         assert signals["warren_buffett_agent"]["AAPL"]["signal"] == "bullish"
 
-    @patch('src.agents.warren_buffett.call_llm')
-    @patch('src.agents.warren_buffett.get_financial_metrics')
-    @patch('src.agents.warren_buffett.search_line_items')
-    @patch('src.agents.warren_buffett.get_market_cap')
-    def test_warren_buffett_agent_handles_missing_data(
-        self, mock_market_cap, mock_line_items, mock_metrics, mock_call_llm
-    ):
+    @patch("src.agents.warren_buffett.call_llm")
+    @patch("src.agents.warren_buffett.get_financial_metrics")
+    @patch("src.agents.warren_buffett.search_line_items")
+    @patch("src.agents.warren_buffett.get_market_cap")
+    def test_warren_buffett_agent_handles_missing_data(self, mock_market_cap, mock_line_items, mock_metrics, mock_call_llm):
         """Test Warren Buffett agent handles missing financial data."""
         from src.agents.warren_buffett import warren_buffett_agent, WarrenBuffettSignal
-        
+
         # Return empty data
         mock_metrics.return_value = []
         mock_line_items.return_value = []
         mock_market_cap.return_value = None
-        
+
         # LLM should still be called with whatever data is available
-        mock_call_llm.return_value = WarrenBuffettSignal(
-            signal="neutral",
-            confidence=30,
-            reasoning="Insufficient data for analysis"
-        )
-        
+        mock_call_llm.return_value = WarrenBuffettSignal(signal="neutral", confidence=30, reasoning="Insufficient data for analysis")
+
         state = create_mock_state()
         result = warren_buffett_agent(state)
-        
+
         # Should complete without errors
         assert "messages" in result
 
@@ -132,42 +121,31 @@ class TestWarrenBuffettAgent:
 class TestPortfolioManager:
     """Tests for the Portfolio Manager agent."""
 
-    @patch('src.agents.portfolio_manager.call_llm')
+    @patch("src.agents.portfolio_manager.call_llm")
     def test_portfolio_manager_buy_decision(self, mock_call_llm):
         """Test portfolio manager makes buy decision."""
         from src.agents.portfolio_manager import (
             portfolio_management_agent,
-            PortfolioManagerOutput,
             PortfolioDecision,
+            PortfolioManagerOutput,
         )
-        
+
         # Mock LLM response
-        mock_call_llm.return_value = PortfolioManagerOutput(
-            decisions={
-                "AAPL": PortfolioDecision(
-                    action="buy",
-                    quantity=10,
-                    confidence=75,
-                    reasoning="Strong bullish signals from analysts"
-                )
-            }
-        )
-        
+        mock_call_llm.return_value = PortfolioManagerOutput(decisions={"AAPL": PortfolioDecision(action="buy", quantity=10, confidence=75, reasoning="Strong bullish signals from analysts")})
+
         state = create_mock_state()
         state["data"]["analyst_signals"] = {
-            "warren_buffett_agent": {
-                "AAPL": {"signal": "bullish", "confidence": 85}
-            },
+            "warren_buffett_agent": {"AAPL": {"signal": "bullish", "confidence": 85}},
             "risk_management_agent": {
                 "AAPL": {
                     "remaining_position_limit": 50000,
                     "current_price": 180.0,
                 }
-            }
+            },
         }
-        
+
         result = portfolio_management_agent(state)
-        
+
         assert "messages" in result
         # The decision should be in the final message
         final_message = result["messages"][-1]
@@ -175,15 +153,15 @@ class TestPortfolioManager:
         assert "AAPL" in decision_data
         assert decision_data["AAPL"]["action"] == "buy"
 
-    @patch('src.agents.portfolio_manager.call_llm')
+    @patch("src.agents.portfolio_manager.call_llm")
     def test_portfolio_manager_hold_when_no_capacity(self, mock_call_llm):
         """Test portfolio manager holds when no trade capacity."""
         from src.agents.portfolio_manager import (
             portfolio_management_agent,
-            PortfolioManagerOutput,
             PortfolioDecision,
+            PortfolioManagerOutput,
         )
-        
+
         state = create_mock_state()
         state["data"]["analyst_signals"] = {
             "risk_management_agent": {
@@ -193,58 +171,58 @@ class TestPortfolioManager:
                 }
             }
         }
-        
+
         # LLM won't be called for tickers with no capacity
         result = portfolio_management_agent(state)
-        
+
         assert "messages" in result
 
 
 class TestSentimentAgent:
     """Tests for the Sentiment agent (non-LLM based)."""
 
-    @patch('src.agents.sentiment.get_insider_trades')
-    @patch('src.agents.sentiment.get_company_news')
+    @patch("src.agents.sentiment.get_insider_trades")
+    @patch("src.agents.sentiment.get_company_news")
     def test_sentiment_agent_bullish(self, mock_news, mock_trades):
         """Test sentiment agent returns bullish signal."""
         from src.agents.sentiment import sentiment_analyst_agent
-        
+
         # Mock insider trades (buying activity)
         mock_trade = Mock()
         mock_trade.transaction_shares = 10000  # Positive = buying
         mock_trades.return_value = [mock_trade] * 10
-        
+
         # Mock positive news
         mock_article = Mock()
         mock_article.sentiment = "positive"
         mock_news.return_value = [mock_article] * 20
-        
+
         state = create_mock_state()
         result = sentiment_analyst_agent(state)
-        
+
         signals = result["data"]["analyst_signals"]
         assert "sentiment_analyst_agent" in signals
         assert signals["sentiment_analyst_agent"]["AAPL"]["signal"] == "bullish"
 
-    @patch('src.agents.sentiment.get_insider_trades')
-    @patch('src.agents.sentiment.get_company_news')
+    @patch("src.agents.sentiment.get_insider_trades")
+    @patch("src.agents.sentiment.get_company_news")
     def test_sentiment_agent_bearish(self, mock_news, mock_trades):
         """Test sentiment agent returns bearish signal."""
         from src.agents.sentiment import sentiment_analyst_agent
-        
+
         # Mock insider trades (selling activity)
         mock_trade = Mock()
         mock_trade.transaction_shares = -10000  # Negative = selling
         mock_trades.return_value = [mock_trade] * 10
-        
+
         # Mock negative news
         mock_article = Mock()
         mock_article.sentiment = "negative"
         mock_news.return_value = [mock_article] * 20
-        
+
         state = create_mock_state()
         result = sentiment_analyst_agent(state)
-        
+
         signals = result["data"]["analyst_signals"]
         assert signals["sentiment_analyst_agent"]["AAPL"]["signal"] == "bearish"
 
@@ -252,15 +230,13 @@ class TestSentimentAgent:
 class TestValuationAgent:
     """Tests for the Valuation agent (non-LLM based)."""
 
-    @patch('src.agents.valuation.get_financial_metrics')
-    @patch('src.agents.valuation.search_line_items')
-    @patch('src.agents.valuation.get_market_cap')
-    def test_valuation_agent_undervalued(
-        self, mock_market_cap, mock_line_items, mock_metrics
-    ):
+    @patch("src.agents.valuation.get_financial_metrics")
+    @patch("src.agents.valuation.search_line_items")
+    @patch("src.agents.valuation.get_market_cap")
+    def test_valuation_agent_undervalued(self, mock_market_cap, mock_line_items, mock_metrics):
         """Test valuation agent identifies undervalued stock."""
         from src.agents.valuation import valuation_analyst_agent
-        
+
         # Mock metrics showing undervaluation
         mock_metric = Mock()
         mock_metric.market_cap = 100000000000
@@ -275,7 +251,7 @@ class TestValuationAgent:
         mock_metric.book_value_growth = 0.08
         mock_metric.price_to_book_ratio = 5
         mock_metrics.return_value = [mock_metric] * 8
-        
+
         # Mock line items
         mock_item = Mock()
         mock_item.free_cash_flow = 15000000000
@@ -291,12 +267,12 @@ class TestValuationAgent:
         mock_item.ebit = 52000000000
         mock_item.ebitda = 57000000000
         mock_line_items.return_value = [mock_item] * 8
-        
+
         mock_market_cap.return_value = 100000000000  # Low market cap vs intrinsic value
-        
+
         state = create_mock_state()
         result = valuation_analyst_agent(state)
-        
+
         signals = result["data"]["analyst_signals"]
         assert "valuation_analyst_agent" in signals
 
@@ -304,34 +280,38 @@ class TestValuationAgent:
 class TestRiskManager:
     """Tests for the Risk Manager agent."""
 
-    @patch('src.agents.risk_manager.prices_to_df')
-    @patch('src.agents.risk_manager.get_prices')
+    @patch("src.agents.risk_manager.prices_to_df")
+    @patch("src.agents.risk_manager.get_prices")
     def test_risk_manager_calculates_limits(self, mock_get_prices, mock_prices_to_df):
         """Test risk manager calculates position limits."""
-        from src.agents.risk_manager import risk_management_agent
-        import pandas as pd
-        import numpy as np
         from datetime import datetime, timedelta
-        
+
+        import numpy as np
+        import pandas as pd
+
+        from src.agents.risk_manager import risk_management_agent
+
         # Create a proper DataFrame that the risk manager expects
         base_date = datetime(2024, 1, 1)
-        dates = pd.date_range(start=base_date, periods=60, freq='D')
-        df = pd.DataFrame({
-            'Date': dates,
-            'open': np.random.uniform(175, 180, 60),
-            'close': np.random.uniform(178, 185, 60),
-            'high': np.random.uniform(180, 190, 60),
-            'low': np.random.uniform(170, 178, 60),
-            'volume': np.random.randint(40000000, 60000000, 60),
-        })
-        df = df.set_index('Date')
-        
+        dates = pd.date_range(start=base_date, periods=60, freq="D")
+        df = pd.DataFrame(
+            {
+                "Date": dates,
+                "open": np.random.uniform(175, 180, 60),
+                "close": np.random.uniform(178, 185, 60),
+                "high": np.random.uniform(180, 190, 60),
+                "low": np.random.uniform(170, 178, 60),
+                "volume": np.random.randint(40000000, 60000000, 60),
+            }
+        )
+        df = df.set_index("Date")
+
         mock_get_prices.return_value = [Mock()] * 60  # Return something so the agent continues
         mock_prices_to_df.return_value = df
-        
+
         state = create_mock_state()
         result = risk_management_agent(state)
-        
+
         signals = result["data"]["analyst_signals"]
         assert "risk_management_agent" in signals
         assert "AAPL" in signals["risk_management_agent"]
@@ -341,24 +321,24 @@ class TestRiskManager:
 class TestMultiTickerAnalysis:
     """Tests for multi-ticker analysis."""
 
-    @patch('src.agents.sentiment.get_insider_trades')
-    @patch('src.agents.sentiment.get_company_news')
+    @patch("src.agents.sentiment.get_insider_trades")
+    @patch("src.agents.sentiment.get_company_news")
     def test_sentiment_agent_multiple_tickers(self, mock_news, mock_trades):
         """Test sentiment agent handles multiple tickers."""
         from src.agents.sentiment import sentiment_analyst_agent
-        
+
         # Mock data for each ticker
         mock_trade = Mock()
         mock_trade.transaction_shares = 5000
         mock_trades.return_value = [mock_trade] * 5
-        
+
         mock_article = Mock()
         mock_article.sentiment = "positive"
         mock_news.return_value = [mock_article] * 10
-        
+
         state = create_mock_state(tickers=["AAPL", "NVDA", "TSLA"])
         result = sentiment_analyst_agent(state)
-        
+
         signals = result["data"]["analyst_signals"]["sentiment_analyst_agent"]
         assert "AAPL" in signals
         assert "NVDA" in signals
@@ -371,21 +351,21 @@ class TestModelTierSelection:
     def test_famous_investor_uses_opus(self):
         """Verify famous investor agents are assigned OPUS tier."""
         from src.llm.claude_config import get_claude_model_for_agent
-        
+
         model, provider = get_claude_model_for_agent("warren_buffett_agent")
         assert "opus" in model.lower()
-        
+
     def test_analysis_agent_uses_sonnet(self):
         """Verify analysis agents are assigned SONNET tier."""
         from src.llm.claude_config import get_claude_model_for_agent
-        
+
         model, provider = get_claude_model_for_agent("sentiment_analyst_agent")
         assert "sonnet" in model.lower()
 
     def test_portfolio_manager_uses_sonnet(self):
         """Verify portfolio manager uses SONNET tier."""
         from src.llm.claude_config import get_claude_model_for_agent
-        
+
         model, provider = get_claude_model_for_agent("portfolio_manager")
         assert "sonnet" in model.lower()
 
