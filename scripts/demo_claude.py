@@ -16,21 +16,26 @@ The script will:
 1. Check Claude Code CLI availability
 2. Show the model tier configuration
 3. Run analysis with a subset of famous investor agents
-4. Display the portfolio manager's decisions
+4. Display beautiful formatted results with ASCII charts
 """
 
 import os
 import sys
+from datetime import datetime
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 from colorama import Fore, Style, init
+from rich.console import Console
+from rich.panel import Panel
 
 # Load environment variables
 load_dotenv()
 init(autoreset=True)
+
+console = Console()
 
 
 def check_claude_code():
@@ -38,16 +43,16 @@ def check_claude_code():
     from src.llm.claude_code import is_claude_code_available, get_status
     
     if not is_claude_code_available():
-        print(f"{Fore.RED}Error: Claude Code CLI is not installed.{Style.RESET_ALL}")
-        print(f"\nInstall with:")
-        print(f"  npm install -g @anthropic-ai/claude-code")
-        print(f"\nThen run this script again.")
+        console.print("[red]❌ Error: Claude Code CLI is not installed.[/red]")
+        console.print("\n[yellow]Install with:[/yellow]")
+        console.print("  npm install -g @anthropic-ai/claude-code")
+        console.print("\nThen run this script again.")
         return False
     
     status = get_status()
-    print(f"{Fore.GREEN}✓ Claude Code CLI detected{Style.RESET_ALL}")
+    console.print("[green]✓ Claude Code CLI detected[/green]")
     if status.get("version"):
-        print(f"  Version: {status['version']}")
+        console.print(f"  Version: {status['version']}")
     return True
 
 
@@ -55,39 +60,49 @@ def show_model_config():
     """Display the Claude model tier configuration."""
     from src.llm.claude_code import get_status, AGENT_MODEL_TIERS
     
-    print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Claude Model Tier Configuration{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
+    console.print(Panel.fit(
+        "[bold cyan]Claude Model Tier Configuration[/bold cyan]",
+        border_style="cyan"
+    ))
     
     status = get_status()
     for tier_name, description in status["model_tiers"].items():
-        print(f"{Fore.GREEN}Tier: {tier_name.upper()}{Style.RESET_ALL}")
-        print(f"  {description}")
-        print()
+        console.print(f"[green]Tier: {tier_name.upper()}[/green]")
+        console.print(f"  {description}")
+        console.print()
     
-    print(f"{Fore.YELLOW}Agent Model Assignments:{Style.RESET_ALL}")
+    console.print("[yellow]Agent Model Assignments:[/yellow]")
     opus_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t == "opus"]
     sonnet_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t == "sonnet"]
     
-    print(f"  OPUS ({len(opus_agents)} agents): Complex reasoning required")
+    console.print(f"  [magenta]OPUS[/magenta] ({len(opus_agents)} agents): Complex reasoning required")
     for agent in opus_agents[:3]:
-        print(f"    - {agent}")
+        agent_display = agent.replace("_agent", "").replace("_", " ").title()
+        console.print(f"    • {agent_display}")
     if len(opus_agents) > 3:
-        print(f"    ... and {len(opus_agents) - 3} more")
+        console.print(f"    ... and {len(opus_agents) - 3} more")
     
-    print(f"  SONNET ({len(sonnet_agents)} agents): Balanced performance")
+    console.print(f"  [cyan]SONNET[/cyan] ({len(sonnet_agents)} agents): Balanced performance")
     for agent in sonnet_agents[:3]:
-        print(f"    - {agent}")
+        agent_display = agent.replace("_agent", "").replace("_", " ").title()
+        console.print(f"    • {agent_display}")
     if len(sonnet_agents) > 3:
-        print(f"    ... and {len(sonnet_agents) - 3} more")
+        console.print(f"    ... and {len(sonnet_agents) - 3} more")
 
 
-def run_demo():
+def show_investor_legend():
+    """Show the famous investor agents and their philosophies."""
+    from src.utils.rich_output import print_investor_legend
+    console.print()
+    print_investor_legend()
+
+
+def run_demo(use_rich_output: bool = True):
     """Run the demo with free stocks."""
-    from datetime import datetime
     from dateutil.relativedelta import relativedelta
     from src.main import run_hedge_fund
     from src.utils.display import print_trading_output
+    from src.utils.rich_output import print_analysis_summary, timing_tracker
     
     # Configuration
     tickers = ["AAPL", "NVDA", "TSLA"]  # Free stocks
@@ -97,6 +112,8 @@ def run_demo():
     # Select a subset of agents for the demo
     selected_analysts = [
         "warren_buffett",      # Famous investor - uses OPUS
+        "charlie_munger",      # Famous investor - uses OPUS
+        "ben_graham",          # Famous investor - uses OPUS
         "sentiment",           # Analysis - uses SONNET
         "technicals",          # Analysis - uses SONNET
         "valuation",           # Analysis - uses SONNET
@@ -123,20 +140,25 @@ def run_demo():
         },
     }
     
-    print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}AI Hedge Fund Demo - Claude Code CLI{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
+    console.print()
+    console.print(Panel.fit(
+        "[bold cyan]AI Hedge Fund Demo - Claude Code CLI[/bold cyan]",
+        border_style="cyan"
+    ))
     
-    print(f"{Fore.YELLOW}Configuration:{Style.RESET_ALL}")
-    print(f"  Tickers: {', '.join(tickers)}")
-    print(f"  Date Range: {start_date} to {end_date}")
-    print(f"  Initial Cash: $100,000")
-    print(f"  Analysts: {', '.join(selected_analysts)}")
-    print(f"  Model Provider: Claude Code CLI (uses your subscription)")
-    print()
+    console.print("\n[yellow]Configuration:[/yellow]")
+    console.print(f"  Tickers: [cyan]{', '.join(tickers)}[/cyan]")
+    console.print(f"  Date Range: {start_date} to {end_date}")
+    console.print(f"  Initial Cash: [green]$100,000[/green]")
+    console.print(f"  Analysts: {len(selected_analysts)} agents")
+    console.print(f"  Model Provider: [magenta]Claude Code CLI[/magenta] (uses your subscription)")
+    console.print()
     
-    print(f"{Fore.GREEN}Running analysis...{Style.RESET_ALL}")
-    print(f"(This may take a few minutes as each agent analyzes the stocks)\n")
+    console.print("[green]Running analysis...[/green]")
+    console.print("[dim](This may take a few minutes as each agent analyzes the stocks)[/dim]\n")
+    
+    # Start timing
+    timing_tracker.start()
     
     # Run the hedge fund with Claude Code
     result = run_hedge_fund(
@@ -150,43 +172,68 @@ def run_demo():
         model_provider="ClaudeCode",  # Use Claude Code CLI
     )
     
-    print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Results{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
+    # Get timing results
+    timing_info = timing_tracker.get_results()
     
-    print_trading_output(result)
+    console.print()
     
-    return result
+    # Display results
+    if use_rich_output:
+        print_analysis_summary(result, timing_info)
+    else:
+        console.print(Panel.fit(
+            "[bold cyan]Results[/bold cyan]",
+            border_style="cyan"
+        ))
+        print_trading_output(result)
+    
+    return result, timing_info
 
 
 def main():
     """Main entry point."""
-    print(f"\n{Fore.CYAN}AI Hedge Fund - Claude Code CLI Demo{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{'='*40}{Style.RESET_ALL}\n")
+    from src.utils.rich_output import print_header
+    
+    print_header()
+    console.print()
     
     # Check Claude Code CLI
     if not check_claude_code():
         sys.exit(1)
     
+    console.print()
+    
+    # Show investor legend
+    show_investor_legend()
+    
+    console.print()
+    
     # Show model configuration
     show_model_config()
     
     # Ask to continue
-    print(f"\n{Fore.YELLOW}Ready to run the demo?{Style.RESET_ALL}")
-    print("This will use Claude Code CLI with your Claude subscription.")
-    print("No API key required!")
-    response = input("Continue? [y/N]: ").strip().lower()
+    console.print("\n[yellow]Ready to run the demo?[/yellow]")
+    console.print("This will use Claude Code CLI with your Claude subscription.")
+    console.print("[dim]No API key required![/dim]")
+    response = input("\nContinue? [y/N]: ").strip().lower()
     
     if response != 'y':
-        print("Demo cancelled.")
+        console.print("[dim]Demo cancelled.[/dim]")
         sys.exit(0)
     
     # Run the demo
     try:
-        result = run_demo()
-        print(f"\n{Fore.GREEN}Demo completed successfully!{Style.RESET_ALL}")
+        result, timing_info = run_demo(use_rich_output=True)
+        
+        console.print()
+        console.print("[bold green]✓ Demo completed successfully![/bold green]")
+        console.print(f"[dim]Total analysis time: {timing_info.get('total_seconds', 0):.1f}s[/dim]")
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Demo interrupted by user.[/yellow]")
+        sys.exit(0)
     except Exception as e:
-        print(f"\n{Fore.RED}Error during demo: {e}{Style.RESET_ALL}")
+        console.print(f"\n[red]Error during demo: {e}[/red]")
         import traceback
         traceback.print_exc()
         sys.exit(1)

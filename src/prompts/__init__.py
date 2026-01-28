@@ -1,0 +1,31 @@
+"""
+Prompts module - Enhanced investor prompts with historical context
+"""
+
+from .investor_prompts import (
+    get_investor_prompt,
+    get_all_investor_names,
+    INVESTOR_PROMPTS,
+    WARREN_BUFFETT_SYSTEM_PROMPT,
+    CHARLIE_MUNGER_SYSTEM_PROMPT,
+    BEN_GRAHAM_SYSTEM_PROMPT,
+    PETER_LYNCH_SYSTEM_PROMPT,
+    MICHAEL_BURRY_SYSTEM_PROMPT,
+    CATHIE_WOOD_SYSTEM_PROMPT,
+    BILL_ACKMAN_SYSTEM_PROMPT,
+    STANLEY_DRUCKENMILLER_SYSTEM_PROMPT,
+)
+
+__all__ = [
+    "get_investor_prompt",
+    "get_all_investor_names",
+    "INVESTOR_PROMPTS",
+    "WARREN_BUFFETT_SYSTEM_PROMPT",
+    "CHARLIE_MUNGER_SYSTEM_PROMPT",
+    "BEN_GRAHAM_SYSTEM_PROMPT",
+    "PETER_LYNCH_SYSTEM_PROMPT",
+    "MICHAEL_BURRY_SYSTEM_PROMPT",
+    "CATHIE_WOOD_SYSTEM_PROMPT",
+    "BILL_ACKMAN_SYSTEM_PROMPT",
+    "STANLEY_DRUCKENMILLER_SYSTEM_PROMPT",
+]

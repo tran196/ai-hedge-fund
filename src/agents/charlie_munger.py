@@ -820,12 +820,22 @@ def generate_munger_output(
     agent_id: str,
     confidence_hint: int,
 ) -> CharlieMungerSignal:
+    # Import enhanced prompt (with fallback to inline)
+    try:
+        from src.prompts.investor_prompts import CHARLIE_MUNGER_SYSTEM_PROMPT
+        system_prompt = CHARLIE_MUNGER_SYSTEM_PROMPT
+    except ImportError:
+        # Fallback prompt if module not available
+        system_prompt = (
+            "You are Charlie Munger. Decide bullish, bearish, or neutral using only the facts. "
+            "Apply mental models: inversion, circle of competence, lollapalooza effects. "
+            "Return JSON only. Keep reasoning under 120 characters. "
+            "Use the provided confidence exactly; do not change it."
+        )
+    
     facts_bundle = make_munger_facts_bundle(analysis_data)
     template = ChatPromptTemplate.from_messages([
-        ("system",
-         "You are Charlie Munger. Decide bullish, bearish, or neutral using only the facts. "
-         "Return JSON only. Keep reasoning under 120 characters. "
-         "Use the provided confidence exactly; do not change it."),
+        ("system", system_prompt),
         ("human",
          "Ticker: {ticker}\n"
          "Facts:\n{facts}\n"

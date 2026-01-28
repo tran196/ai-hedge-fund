@@ -749,7 +749,24 @@ def generate_buffett_output(
         state: AgentState,
         agent_id: str = "warren_buffett_agent",
 ) -> WarrenBuffettSignal:
-    """Get investment decision from LLM with a compact prompt."""
+    """Get investment decision from LLM with enhanced Buffett-style prompt."""
+
+    # Import enhanced prompt (with fallback to inline)
+    try:
+        from src.prompts.investor_prompts import WARREN_BUFFETT_SYSTEM_PROMPT
+        system_prompt = WARREN_BUFFETT_SYSTEM_PROMPT
+    except ImportError:
+        # Fallback prompt if module not available
+        system_prompt = (
+            "You are Warren Buffett. Decide bullish, bearish, or neutral using only the provided facts.\n"
+            "Checklist: Circle of competence, Competitive moat, Management quality, Financial strength, "
+            "Valuation vs intrinsic value, Long-term prospects.\n"
+            "Signal rules: Bullish=strong business AND margin_of_safety>0. "
+            "Bearish=poor business OR overvalued. Neutral=good business but no margin of safety.\n"
+            "Confidence: 90-100%=Exceptional opportunity, 70-89%=Good investment, 50-69%=Mixed signals, "
+            "30-49%=Concerning, 10-29%=Poor investment.\n"
+            "Keep reasoning under 120 characters. Do not invent data. Return JSON only."
+        )
 
     # --- Build compact facts here ---
     facts = {
@@ -770,29 +787,7 @@ def generate_buffett_output(
         [
             (
                 "system",
-                "You are Warren Buffett. Decide bullish, bearish, or neutral using only the provided facts.\n"
-                "\n"
-                "Checklist for decision:\n"
-                "- Circle of competence\n"
-                "- Competitive moat\n"
-                "- Management quality\n"
-                "- Financial strength\n"
-                "- Valuation vs intrinsic value\n"
-                "- Long-term prospects\n"
-                "\n"
-                "Signal rules:\n"
-                "- Bullish: strong business AND margin_of_safety > 0.\n"
-                "- Bearish: poor business OR clearly overvalued.\n"
-                "- Neutral: good business but margin_of_safety <= 0, or mixed evidence.\n"
-                "\n"
-                "Confidence scale:\n"
-                "- 90-100%: Exceptional business within my circle, trading at attractive price\n"
-                "- 70-89%: Good business with decent moat, fair valuation\n"
-                "- 50-69%: Mixed signals, would need more information or better price\n"
-                "- 30-49%: Outside my expertise or concerning fundamentals\n"
-                "- 10-29%: Poor business or significantly overvalued\n"
-                "\n"
-                "Keep reasoning under 120 characters. Do not invent data. Return JSON only."
+                system_prompt
             ),
             (
                 "human",
