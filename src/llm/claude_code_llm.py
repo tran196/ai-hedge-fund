@@ -10,8 +10,13 @@ Usage:
 """
 
 import json
+import os
+import pty
+import re
+import select
 import subprocess
 import shutil
+import time
 from typing import Any, List, Optional, Iterator
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -115,6 +120,25 @@ class ChatClaudeCode(BaseChatModel):
         
         return "\n\n".join(prompt_parts), system_prompt
     
+    def _clean_terminal_output(self, text: str) -> str:
+        """Remove ANSI escape codes and terminal control sequences."""
+        # Remove ANSI escape sequences
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        text = ansi_escape.sub('', text)
+        # Remove OSC sequences (like terminal title setting)
+        text = re.sub(r'\x1B\][^\x07]*\x07', '', text)
+        text = re.sub(r'\]9;[0-9;]+;', '', text)  # iTerm2 specific
+        # Remove CSI sequences
+        text = re.sub(r'\[\?[0-9;]*[a-zA-Z]', '', text)
+        # Remove misc control sequences
+        text = re.sub(r'\[<u', '', text)
+        text = re.sub(r'\[25h', '', text)
+        # Remove carriage returns
+        text = text.replace('\r', '')
+        # Clean up multiple newlines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+    
     def _call_claude_cli(
         self,
         prompt: str,
@@ -127,7 +151,6 @@ class ChatClaudeCode(BaseChatModel):
             "--model", self._normalize_model_name(self.model),
             "--print",  # Non-interactive output
             "--output-format", "text",  # Plain text output
-            "--dangerously-skip-permissions",  # Skip permission prompts for automation
         ]
         
         # Add system prompt if provided
@@ -138,29 +161,60 @@ class ChatClaudeCode(BaseChatModel):
         cmd.append(prompt)
         
         try:
-            result = subprocess.run(
+            # Use PTY for the CLI since it requires a terminal
+            master_fd, slave_fd = pty.openpty()
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout,
-                env={
-                    **subprocess.os.environ,
-                    # Disable interactive features
-                    "CLAUDE_CODE_DISABLE_INTERACTIVE": "1",
-                }
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                close_fds=True,
             )
+            os.close(slave_fd)
             
-            if result.returncode != 0:
-                error_msg = result.stderr.strip() or "Unknown error"
-                # Check for common issues
-                if "overloaded" in error_msg.lower():
-                    raise RuntimeError("Claude API is overloaded, try again later")
-                raise RuntimeError(f"Claude CLI error: {error_msg}")
+            # Read output with timeout
+            output = b''
+            start_time = time.time()
             
-            return result.stdout.strip()
+            while time.time() - start_time < self.timeout:
+                if select.select([master_fd], [], [], 1.0)[0]:
+                    try:
+                        chunk = os.read(master_fd, 4096)
+                        if not chunk:
+                            break
+                        output += chunk
+                    except OSError:
+                        break
+                
+                # Check if process finished
+                if proc.poll() is not None:
+                    # Read remaining output
+                    while select.select([master_fd], [], [], 0.1)[0]:
+                        try:
+                            chunk = os.read(master_fd, 4096)
+                            if not chunk:
+                                break
+                            output += chunk
+                        except OSError:
+                            break
+                    break
             
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Claude CLI timed out after {self.timeout} seconds")
+            os.close(master_fd)
+            
+            # Check for timeout
+            if proc.poll() is None:
+                proc.kill()
+                raise RuntimeError(f"Claude CLI timed out after {self.timeout} seconds")
+            
+            # Decode and clean output
+            response = output.decode('utf-8', errors='replace')
+            response = self._clean_terminal_output(response)
+            
+            if proc.returncode != 0:
+                raise RuntimeError(f"Claude CLI error (code {proc.returncode}): {response[:500]}")
+            
+            return response
+            
         except FileNotFoundError:
             raise RuntimeError(f"Claude CLI not found at {self.claude_cli_path}")
     
