@@ -1,37 +1,64 @@
 # Claude Integration Summary
 
-**Date:** January 28, 2025
+**Date:** January 28, 2026
 **Branch:** `feature/claude-integration`
-**Status:** ✅ Complete
+**Status:** ✅ Complete (Round 3)
 
 ## Major Update: Claude Code CLI Integration
 
 This integration uses **Claude Code CLI** instead of the Anthropic API, allowing you to use your **existing Claude Pro subscription** without needing a separate API key!
 
-## What Was Accomplished
+## Completed Rounds
 
-### 1. Claude Code CLI Integration
+### Round 1: Claude Code CLI Integration ✅
 - Created `src/llm/claude_code.py` with CLI wrapper
 - Calls `claude --print --model <tier> --output-format json <prompt>`
 - No API key required - uses your Claude subscription
 
-### 2. Tiered Model Selection
+### Round 2: Full Demo & Testing ✅
+- 87 tests all passing
+- Full documentation
+- Demo scripts working
+
+### Round 3: Prompt Optimization & Output Polish ✅
+
+#### 1. Enhanced Investor Prompts (`src/prompts/investor_prompts.py`)
+Each famous investor agent now has a rich system prompt including:
+- **Historical context** and biography
+- **Famous quotes** that capture their philosophy
+- **Specific investment criteria** checklist
+- **Reasoning chain** guidance
+- **Confidence scale** definitions
+
+Investors covered:
+- Warren Buffett (value investing, moats)
+- Charlie Munger (mental models, quality)
+- Benjamin Graham (deep value, Graham Number)
+- Peter Lynch (GARP, PEG ratio)
+- Michael Burry (contrarian, asymmetric bets)
+- Cathie Wood (disruptive innovation)
+- Bill Ackman (activist investing)
+- Stanley Druckenmiller (macro trends)
+
+#### 2. Rich Terminal Output (`src/utils/rich_output.py`)
+Beautiful formatted output including:
+- 🎨 **ASCII art header** for branding
+- 📊 **Colored confidence bars** with visual indicators
+- 📈 **Portfolio allocation charts** (ASCII bar charts)
+- 🗳️ **Agent vote summaries** with visual distribution
+- ⏱️ **Timing metrics** display
+- 🏆 **Backtesting comparison** tables with rankings
+
+#### 3. Demo Scripts
+- `scripts/demo_claude.py` - Full demo with rich output
+- `scripts/demo_output.py` - UI showcase with mock data
+
+## Model Tier Selection
+
 | Tier | Agents | Use Case |
 |------|--------|----------|
-| **OPUS** | Warren Buffett, Charlie Munger, etc. | Complex investment reasoning |
-| **SONNET** | Valuation, Sentiment, Risk, Portfolio | Balanced analysis |
-| **HAIKU** | (Available for future use) | Quick tasks |
-
-### 3. Smart Routing
-The system automatically:
-1. Checks if Claude Code CLI is available
-2. Uses CLI for Claude provider requests
-3. Falls back to Anthropic API if `USE_ANTHROPIC_API=true`
-4. Falls back to OpenAI if nothing else available
-
-### 4. Comprehensive Tests
-- 22 tests for Claude Code CLI integration
-- 77 total tests passing
+| **OPUS** | Warren Buffett, Charlie Munger, Ben Graham, Peter Lynch, Michael Burry, Cathie Wood, Bill Ackman, Stanley Druckenmiller, Phil Fisher, Aswath Damodaran, Mohnish Pabrai, Rakesh Jhunjhunwala | Complex investment reasoning |
+| **SONNET** | Valuation, Sentiment, Technical, Risk Management, Portfolio Manager, Fundamentals, News Sentiment | Balanced analysis |
 
 ## Quick Start
 
@@ -45,46 +72,113 @@ npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
-### 3. Run the Demo
+### 3. Run the Demo (with rich output)
 ```bash
 poetry run python scripts/demo_claude.py
 ```
 
-### 4. Run the Hedge Fund
+### 4. Run the UI Demo (no API calls)
+```bash
+poetry run python scripts/demo_output.py
+```
+
+### 5. Run the Hedge Fund
 ```bash
 poetry run python src/main.py --ticker AAPL,NVDA,TSLA
 # Select "Claude Sonnet 4" from the menu
 ```
 
-## Files Changed
-
-### New Files
-- `src/llm/claude_code.py` - Claude Code CLI wrapper
-- `docs/CLAUDE_INTEGRATION.md` - Documentation
-- `scripts/demo_claude.py` - Demo script
-- `tests/test_claude_code.py` - Tests (22 tests)
-
-### Modified Files
-- `src/utils/llm.py` - Updated to route to Claude Code CLI
-- `src/llm/api_models.json` - Reordered models
-- `README.md` - Added Claude section
-
-## Architecture
+## Project Structure
 
 ```
-User Request
-     │
-     ▼
-call_llm()
-     │
-     ├── Claude provider?
-     │        │
-     │        ├── CLI available? ──► subprocess: claude --print --model opus "prompt"
-     │        │
-     │        └── API key set? ──► LangChain: ChatAnthropic()
-     │
-     └── Other provider ──► LangChain: ChatOpenAI(), etc.
+ai-hedge-fund/
+├── src/
+│   ├── agents/                 # Investor agents
+│   │   ├── warren_buffett.py   # Uses enhanced prompts
+│   │   ├── charlie_munger.py   # Uses enhanced prompts
+│   │   ├── ben_graham.py       # Uses enhanced prompts
+│   │   └── ...
+│   ├── llm/
+│   │   ├── claude_code.py      # Claude Code CLI wrapper
+│   │   └── claude_code_llm.py  # LangChain-compatible LLM
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   └── investor_prompts.py # Enhanced investor prompts
+│   └── utils/
+│       ├── display.py          # Original output formatting
+│       └── rich_output.py      # NEW: Rich terminal output
+├── scripts/
+│   ├── demo_claude.py          # Full demo with rich output
+│   └── demo_output.py          # UI demo with mock data
+├── tests/
+│   └── ...                     # 87 tests all passing
+└── docs/
+    └── CLAUDE_INTEGRATION.md
 ```
+
+## Sample Output
+
+```
+╔═══════════════════════════════════════════════════════════════╗
+║     █████╗ ██╗    ██╗  ██╗███████╗██████╗  ██████╗ ███████╗   ║
+║    ██╔══██╗██║    ██║  ██║██╔════╝██╔══██╗██╔════╝ ██╔════╝   ║
+║    ███████║██║    ███████║█████╗  ██║  ██║██║  ███╗█████╗     ║
+║              🤖 AI-Powered Investment Analysis Platform       ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📊 ANALYSIS OVERVIEW
+  Tickers: AAPL, NVDA, TSLA
+  Agents:  8 famous investors
+  Time:    127.5s
+
+🤖 AGENT SIGNALS
+═══ AAPL ═══
+Warren Buffett  ▲ BULLISH  88%  ████████████████
+Charlie Munger  ▲ BULLISH  85%  ███████████████░
+Ben Graham      ◆ NEUTRAL  45%  ███████░░░░░░░░░
+
+💼 TRADING DECISIONS
+  AAPL  🟢 BUY   50 shares  78%
+  NVDA  🟡 HOLD   0 shares  55%
+  TSLA  🔴 SELL  30 shares  72%
+
+📈 PORTFOLIO ALLOCATION
+  AAPL  █████████████████████████  62.5%
+  TSLA  ███████████████  37.5%
+
+🏆 BACKTESTING COMPARISON
+  🥇 Warren Buffett   66.7%
+  🥈 Charlie Munger   66.7%
+  🥉 Ben Graham       66.7%
+```
+
+## Tests
+
+```bash
+# Run all tests (87 tests)
+poetry run pytest tests/ -v
+
+# Run Claude Code tests only
+poetry run pytest tests/test_claude_code.py -v
+
+# Run agent tests
+poetry run pytest tests/test_agents_claude.py -v
+```
+
+## Git Commits (Round 3)
+
+1. `feat: improve prompts and output formatting` - Main improvements
+2. `feat: add demo output script for showcasing UI` - Demo script
+
+## Benefits
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Prompts | Generic | Rich historical context + famous quotes |
+| Output | Basic tables | Beautiful ASCII charts + colors |
+| Timing | Not tracked | Full metrics displayed |
+| Backtesting | Basic | Ranked comparison with medals |
+| Confidence | Numbers only | Visual bars with color coding |
 
 ## Environment Variables
 
@@ -95,36 +189,10 @@ call_llm()
 | `ANTHROPIC_API_KEY` | API key (only if forcing API) | No |
 | `FINANCIAL_DATASETS_API_KEY` | For non-free stocks | No |
 
-## Tests
+## Next Steps (Optional Future Work)
 
-```bash
-# Run Claude Code tests only
-poetry run pytest tests/test_claude_code.py -v
-
-# Run all tests
-poetry run pytest tests/ -v
-```
-
-## Git Commits
-
-1. `feat: Add Claude model integration with tiered selection`
-2. `docs: Add Claude integration guide and demo script`
-3. `test: Add comprehensive agent tests for Claude integration`
-4. `refactor: Switch to Claude Code CLI for Pro subscription support`
-
-## Benefits of CLI Over API
-
-| Aspect | Claude Code CLI | Anthropic API |
-|--------|-----------------|---------------|
-| Cost | Free with Pro subscription | Pay per token |
-| Auth | Automatic (uses browser auth) | Requires API key |
-| Setup | `npm install -g @anthropic-ai/claude-code` | Get key from console |
-| Rate Limits | Pro subscription limits | API rate limits |
-
-## Next Steps (Optional)
-
-If time permits:
 - [ ] Add streaming support for real-time output
 - [ ] Implement extended thinking for complex valuations
-- [ ] Add cost tracking (when using API fallback)
-- [ ] Create benchmark comparing model tiers
+- [ ] Add more investor agents (George Soros, Carl Icahn, etc.)
+- [ ] Create web-based dashboard for results
+- [ ] Add portfolio tracking over time
