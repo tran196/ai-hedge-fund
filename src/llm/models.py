@@ -20,6 +20,7 @@ class ModelProvider(str, Enum):
 
     ALIBABA = "Alibaba"
     ANTHROPIC = "Anthropic"
+    CLAUDE_CODE = "ClaudeCode"  # Claude Code CLI (uses Claude Pro subscription)
     DEEPSEEK = "DeepSeek"
     GOOGLE = "Google"
     GROQ = "Groq"
@@ -152,6 +153,10 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
             print(f"API Key Error: Please make sure ANTHROPIC_API_KEY is set in your .env file or provided via API keys.")
             raise ValueError("Anthropic API key not found.  Please make sure ANTHROPIC_API_KEY is set in your .env file or provided via API keys.")
         return ChatAnthropic(model=model_name, api_key=api_key)
+    elif model_provider == ModelProvider.CLAUDE_CODE:
+        # Claude Code CLI - uses Claude Pro subscription, no API key needed
+        from src.llm.claude_code_llm import ChatClaudeCode
+        return ChatClaudeCode(model=model_name, timeout=120)
     elif model_provider == ModelProvider.DEEPSEEK:
         api_key = (api_keys or {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
         if not api_key:

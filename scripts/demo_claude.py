@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Demo script for AI Hedge Fund with Claude Integration
+Demo script for AI Hedge Fund with Claude Code CLI Integration
 
-This script demonstrates the AI Hedge Fund running with Claude models.
-It uses the free stocks (AAPL, NVDA, TSLA) that don't require a financial data API key.
+This script demonstrates the AI Hedge Fund running with Claude models
+via Claude Code CLI (uses your Claude Pro subscription - no API key needed).
 
 Usage:
     poetry run python scripts/demo_claude.py
 
 Requirements:
-    - ANTHROPIC_API_KEY environment variable must be set
+    - Claude Code CLI installed: npm install -g @anthropic-ai/claude-code
     - Optional: FINANCIAL_DATASETS_API_KEY for non-free stocks
 
 The script will:
-1. Show the Claude model tier configuration
-2. Run analysis with a subset of famous investor agents
-3. Display the portfolio manager's decisions
+1. Check Claude Code CLI availability
+2. Show the model tier configuration
+3. Run analysis with a subset of famous investor agents
+4. Display the portfolio manager's decisions
 """
 
 import os
@@ -32,38 +33,41 @@ load_dotenv()
 init(autoreset=True)
 
 
-def check_api_key():
-    """Check if the Anthropic API key is configured."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key or api_key == "your-anthropic-api-key":
-        print(f"{Fore.RED}Error: ANTHROPIC_API_KEY is not set or is a placeholder.{Style.RESET_ALL}")
-        print(f"\nPlease set your API key in .env file:")
-        print(f"  ANTHROPIC_API_KEY=your-actual-api-key")
-        print(f"\nGet your API key from: https://console.anthropic.com/")
+def check_claude_code():
+    """Check if Claude Code CLI is available."""
+    from src.llm.claude_code import is_claude_code_available, get_status
+    
+    if not is_claude_code_available():
+        print(f"{Fore.RED}Error: Claude Code CLI is not installed.{Style.RESET_ALL}")
+        print(f"\nInstall with:")
+        print(f"  npm install -g @anthropic-ai/claude-code")
+        print(f"\nThen run this script again.")
         return False
+    
+    status = get_status()
+    print(f"{Fore.GREEN}✓ Claude Code CLI detected{Style.RESET_ALL}")
+    if status.get("version"):
+        print(f"  Version: {status['version']}")
     return True
 
 
 def show_model_config():
     """Display the Claude model tier configuration."""
-    from src.llm.claude_config import get_model_tier_info, AGENT_MODEL_TIERS
+    from src.llm.claude_code import get_status, AGENT_MODEL_TIERS
     
     print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}Claude Model Tier Configuration{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
     
-    tier_info = get_model_tier_info()
-    for tier_name, info in tier_info.items():
+    status = get_status()
+    for tier_name, description in status["model_tiers"].items():
         print(f"{Fore.GREEN}Tier: {tier_name.upper()}{Style.RESET_ALL}")
-        print(f"  Model: {info['model']}")
-        print(f"  Description: {info['description']}")
-        print(f"  Cost: {info['cost']}")
-        print(f"  Use cases: {', '.join(info['use_cases'])}")
+        print(f"  {description}")
         print()
     
     print(f"{Fore.YELLOW}Agent Model Assignments:{Style.RESET_ALL}")
-    opus_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t.value == "opus"]
-    sonnet_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t.value == "sonnet"]
+    opus_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t == "opus"]
+    sonnet_agents = [a for a, t in AGENT_MODEL_TIERS.items() if t == "sonnet"]
     
     print(f"  OPUS ({len(opus_agents)} agents): Complex reasoning required")
     for agent in opus_agents[:3]:
@@ -120,7 +124,7 @@ def run_demo():
     }
     
     print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}AI Hedge Fund Demo - Claude Integration{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}AI Hedge Fund Demo - Claude Code CLI{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*60}{Style.RESET_ALL}\n")
     
     print(f"{Fore.YELLOW}Configuration:{Style.RESET_ALL}")
@@ -128,13 +132,13 @@ def run_demo():
     print(f"  Date Range: {start_date} to {end_date}")
     print(f"  Initial Cash: $100,000")
     print(f"  Analysts: {', '.join(selected_analysts)}")
-    print(f"  Model Provider: Anthropic (Claude)")
+    print(f"  Model Provider: Claude Code CLI (uses your subscription)")
     print()
     
     print(f"{Fore.GREEN}Running analysis...{Style.RESET_ALL}")
     print(f"(This may take a few minutes as each agent analyzes the stocks)\n")
     
-    # Run the hedge fund
+    # Run the hedge fund with Claude Code
     result = run_hedge_fund(
         tickers=tickers,
         start_date=start_date,
@@ -142,8 +146,8 @@ def run_demo():
         portfolio=portfolio,
         show_reasoning=True,
         selected_analysts=selected_analysts,
-        model_name="claude-sonnet-4-20250514",  # Will be overridden by tier selection
-        model_provider="Anthropic",
+        model_name="sonnet",  # Will be overridden by tier selection
+        model_provider="ClaudeCode",  # Use Claude Code CLI
     )
     
     print(f"\n{Fore.CYAN}{'='*60}{Style.RESET_ALL}")
@@ -157,11 +161,11 @@ def run_demo():
 
 def main():
     """Main entry point."""
-    print(f"\n{Fore.CYAN}AI Hedge Fund - Claude Integration Demo{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}AI Hedge Fund - Claude Code CLI Demo{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*40}{Style.RESET_ALL}\n")
     
-    # Check API key
-    if not check_api_key():
+    # Check Claude Code CLI
+    if not check_claude_code():
         sys.exit(1)
     
     # Show model configuration
@@ -169,7 +173,8 @@ def main():
     
     # Ask to continue
     print(f"\n{Fore.YELLOW}Ready to run the demo?{Style.RESET_ALL}")
-    print("This will use your ANTHROPIC_API_KEY to make API calls.")
+    print("This will use Claude Code CLI with your Claude subscription.")
+    print("No API key required!")
     response = input("Continue? [y/N]: ").strip().lower()
     
     if response != 'y':

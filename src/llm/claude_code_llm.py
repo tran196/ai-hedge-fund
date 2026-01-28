@@ -1,0 +1,309 @@
+"""
+Claude Code CLI LLM Wrapper
+
+This module provides a LangChain-compatible wrapper for Claude Code CLI.
+Allows using Claude Pro subscription instead of Anthropic API key.
+
+Usage:
+    llm = ChatClaudeCode(model="sonnet")
+    response = llm.invoke("Hello, Claude!")
+"""
+
+import json
+import subprocess
+import shutil
+from typing import Any, List, Optional, Iterator
+from langchain_core.callbacks.manager import CallbackManagerForLLMRun
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+from pydantic import Field, model_validator
+
+
+# Find claude CLI path
+def find_claude_cli() -> str:
+    """Find the claude CLI executable path."""
+    # Try common locations
+    common_paths = [
+        "/Users/a/.nvm/versions/node/v22.16.0/bin/claude",
+        "/usr/local/bin/claude",
+        shutil.which("claude"),
+    ]
+    
+    for path in common_paths:
+        if path and shutil.os.path.exists(path):
+            return path
+    
+    # Try which command as fallback
+    result = subprocess.run(["which", "claude"], capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.strip()
+    
+    raise RuntimeError(
+        "Claude CLI not found. Please install it: npm install -g @anthropic-ai/claude-code"
+    )
+
+
+class ChatClaudeCode(BaseChatModel):
+    """
+    LangChain-compatible chat model that uses Claude Code CLI.
+    
+    This allows using Claude Pro subscription without needing an API key.
+    
+    Args:
+        model: Model to use ("opus", "sonnet", "haiku", or full model name)
+        timeout: Timeout for CLI calls in seconds
+        max_tokens: Maximum tokens in response (optional)
+    """
+    
+    model: str = Field(default="sonnet", description="Model name (opus/sonnet/haiku)")
+    timeout: int = Field(default=120, description="Timeout in seconds")
+    max_tokens: Optional[int] = Field(default=None, description="Max output tokens")
+    claude_cli_path: str = Field(default="", description="Path to claude CLI")
+    
+    @model_validator(mode='after')
+    def validate_and_set_cli_path(self) -> 'ChatClaudeCode':
+        """Find and set the claude CLI path."""
+        if not self.claude_cli_path:
+            self.claude_cli_path = find_claude_cli()
+        return self
+    
+    @property
+    def _llm_type(self) -> str:
+        """Return identifier of the LLM."""
+        return "claude-code"
+    
+    @property
+    def _identifying_params(self) -> dict:
+        """Return identifying parameters."""
+        return {
+            "model": self.model,
+            "timeout": self.timeout,
+            "max_tokens": self.max_tokens,
+        }
+    
+    def _normalize_model_name(self, model: str) -> str:
+        """Normalize model name for CLI."""
+        # Map short names to full model names
+        model_mapping = {
+            "opus": "opus",
+            "sonnet": "sonnet",
+            "haiku": "haiku",
+        }
+        
+        # Check if it's a short name
+        model_lower = model.lower()
+        for short, cli_name in model_mapping.items():
+            if short in model_lower:
+                return cli_name
+        
+        # Return as-is for full model names
+        return model
+    
+    def _messages_to_prompt(self, messages: List[BaseMessage]) -> tuple[str, Optional[str]]:
+        """Convert messages to a prompt string and optional system prompt."""
+        system_prompt = None
+        prompt_parts = []
+        
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                system_prompt = msg.content
+            elif isinstance(msg, HumanMessage):
+                prompt_parts.append(msg.content)
+            elif isinstance(msg, AIMessage):
+                prompt_parts.append(f"Assistant: {msg.content}")
+        
+        return "\n\n".join(prompt_parts), system_prompt
+    
+    def _call_claude_cli(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Call Claude CLI and return the response."""
+        # Build command
+        cmd = [
+            self.claude_cli_path,
+            "--model", self._normalize_model_name(self.model),
+            "--print",  # Non-interactive output
+            "--output-format", "text",  # Plain text output
+            "--dangerously-skip-permissions",  # Skip permission prompts for automation
+        ]
+        
+        # Add system prompt if provided
+        if system_prompt:
+            cmd.extend(["--system-prompt", system_prompt])
+        
+        # Add the prompt at the end (positional argument)
+        cmd.append(prompt)
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+                env={
+                    **subprocess.os.environ,
+                    # Disable interactive features
+                    "CLAUDE_CODE_DISABLE_INTERACTIVE": "1",
+                }
+            )
+            
+            if result.returncode != 0:
+                error_msg = result.stderr.strip() or "Unknown error"
+                # Check for common issues
+                if "overloaded" in error_msg.lower():
+                    raise RuntimeError("Claude API is overloaded, try again later")
+                raise RuntimeError(f"Claude CLI error: {error_msg}")
+            
+            return result.stdout.strip()
+            
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Claude CLI timed out after {self.timeout} seconds")
+        except FileNotFoundError:
+            raise RuntimeError(f"Claude CLI not found at {self.claude_cli_path}")
+    
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """Generate a response from the model."""
+        prompt, system_prompt = self._messages_to_prompt(messages)
+        
+        response = self._call_claude_cli(prompt, system_prompt)
+        
+        # Apply stop sequences if provided
+        if stop:
+            for stop_seq in stop:
+                if stop_seq in response:
+                    response = response[:response.index(stop_seq)]
+        
+        message = AIMessage(content=response)
+        generation = ChatGeneration(message=message)
+        
+        return ChatResult(generations=[generation])
+    
+    def with_structured_output(
+        self,
+        schema: Any,
+        method: str = "json_mode",
+        **kwargs: Any,
+    ) -> "StructuredClaudeCode":
+        """Return a wrapper that parses output to a Pydantic model."""
+        return StructuredClaudeCode(
+            base_model=self,
+            schema=schema,
+        )
+
+
+class StructuredClaudeCode:
+    """Wrapper that adds structured output parsing to ChatClaudeCode."""
+    
+    def __init__(self, base_model: ChatClaudeCode, schema: Any):
+        self.base_model = base_model
+        self.schema = schema
+    
+    def invoke(self, messages: Any, **kwargs) -> Any:
+        """Invoke the model and parse the response."""
+        # Add JSON instruction to the prompt
+        if hasattr(messages, 'to_messages'):
+            messages = messages.to_messages()
+        elif isinstance(messages, str):
+            messages = [HumanMessage(content=messages)]
+        elif not isinstance(messages, list):
+            messages = list(messages)
+        
+        # Add JSON schema instruction
+        schema_info = ""
+        if hasattr(self.schema, 'model_json_schema'):
+            schema_info = json.dumps(self.schema.model_json_schema(), indent=2)
+        
+        json_instruction = SystemMessage(
+            content=(
+                f"You must respond with valid JSON that matches this schema:\n"
+                f"```json\n{schema_info}\n```\n"
+                f"Return ONLY the JSON object, no other text."
+            )
+        )
+        
+        # Prepend the JSON instruction
+        messages = [json_instruction] + list(messages)
+        
+        # Get response
+        result = self.base_model._generate(messages)
+        response_text = result.generations[0].message.content
+        
+        # Extract JSON from response
+        json_str = self._extract_json(response_text)
+        
+        # Parse into the schema
+        try:
+            data = json.loads(json_str)
+            return self.schema(**data)
+        except (json.JSONDecodeError, Exception) as e:
+            raise ValueError(f"Failed to parse response as {self.schema.__name__}: {e}\nResponse: {response_text}")
+    
+    def _extract_json(self, text: str) -> str:
+        """Extract JSON from text, handling code blocks."""
+        text = text.strip()
+        
+        # Try to find JSON in code block
+        if "```json" in text:
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end != -1:
+                return text[start:end].strip()
+        
+        # Try to find JSON in generic code block
+        if "```" in text:
+            start = text.find("```") + 3
+            # Skip language identifier if present
+            newline = text.find("\n", start)
+            if newline != -1:
+                start = newline + 1
+            end = text.find("```", start)
+            if end != -1:
+                return text[start:end].strip()
+        
+        # Try to find JSON object directly
+        if text.startswith("{"):
+            # Find matching closing brace
+            depth = 0
+            for i, c in enumerate(text):
+                if c == "{":
+                    depth += 1
+                elif c == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return text[:i+1]
+        
+        # Return as-is and hope for the best
+        return text
+
+
+# Convenience function
+def get_claude_code_model(
+    model: str = "sonnet",
+    timeout: int = 120,
+    max_tokens: Optional[int] = None,
+) -> ChatClaudeCode:
+    """
+    Get a ChatClaudeCode instance.
+    
+    Args:
+        model: Model name ("opus", "sonnet", "haiku" or full name)
+        timeout: Timeout in seconds
+        max_tokens: Maximum output tokens
+    
+    Returns:
+        ChatClaudeCode instance
+    """
+    return ChatClaudeCode(
+        model=model,
+        timeout=timeout,
+        max_tokens=max_tokens,
+    )

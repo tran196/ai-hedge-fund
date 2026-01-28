@@ -8,9 +8,15 @@ Model Tiers:
 - OPUS: Complex analysis requiring deep reasoning (valuation, fundamentals, famous investors)
 - SONNET: Routine tasks with good reasoning (sentiment, technicals, risk management)
 - HAIKU: Quick decisions and simple formatting (portfolio manager final decisions)
+
+Provider Options:
+- ANTHROPIC: Uses Anthropic API (requires ANTHROPIC_API_KEY)
+- CLAUDE_CODE: Uses Claude Code CLI (requires Claude Pro subscription, no API key)
 """
 
 import os
+import shutil
+import subprocess
 from enum import Enum
 from typing import Dict, Optional, Tuple
 
@@ -24,11 +30,18 @@ class ClaudeModelTier(str, Enum):
     HAIKU = "haiku"    # Fast and efficient, for simple tasks
 
 
-# Claude model names for each tier
+# Claude model names for each tier (for API)
 CLAUDE_MODELS = {
     ClaudeModelTier.OPUS: "claude-opus-4-20250514",
     ClaudeModelTier.SONNET: "claude-sonnet-4-20250514",
     ClaudeModelTier.HAIKU: "claude-3-5-haiku-latest",
+}
+
+# Claude Code CLI model names (simpler names for CLI)
+CLAUDE_CODE_MODELS = {
+    ClaudeModelTier.OPUS: "opus",
+    ClaudeModelTier.SONNET: "sonnet",
+    ClaudeModelTier.HAIKU: "haiku",
 }
 
 
@@ -62,19 +75,55 @@ AGENT_MODEL_TIERS: Dict[str, ClaudeModelTier] = {
 }
 
 
-def get_claude_model_for_agent(agent_name: str) -> Tuple[str, str]:
+def is_claude_code_available() -> bool:
+    """Check if Claude Code CLI is available."""
+    # Try common paths first
+    common_paths = [
+        "/Users/a/.nvm/versions/node/v22.16.0/bin/claude",
+        shutil.which("claude"),
+    ]
+    
+    for path in common_paths:
+        if path and os.path.exists(path):
+            return True
+    
+    # Try which command
+    try:
+        result = subprocess.run(
+            ["which", "claude"], 
+            capture_output=True, 
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+
+def get_claude_model_for_agent(agent_name: str, use_cli: bool = None) -> Tuple[str, str]:
     """
     Get the appropriate Claude model for a given agent.
     
     Args:
         agent_name: The name of the agent (e.g., "warren_buffett_agent")
+        use_cli: Force CLI (True) or API (False). If None, auto-detect.
         
     Returns:
         Tuple of (model_name, provider_name)
     """
     tier = AGENT_MODEL_TIERS.get(agent_name, ClaudeModelTier.SONNET)
-    model_name = CLAUDE_MODELS[tier]
-    return model_name, ModelProvider.ANTHROPIC.value
+    
+    # Determine which provider to use
+    if use_cli is None:
+        # Auto-detect: prefer CLI if available and API key not set
+        use_cli = is_claude_code_available() and not is_claude_configured()
+    
+    if use_cli:
+        model_name = CLAUDE_CODE_MODELS[tier]
+        return model_name, ModelProvider.CLAUDE_CODE.value
+    else:
+        model_name = CLAUDE_MODELS[tier]
+        return model_name, ModelProvider.ANTHROPIC.value
 
 
 def is_claude_configured() -> bool:
@@ -85,13 +134,18 @@ def is_claude_configured() -> bool:
 
 def get_default_model() -> Tuple[str, str]:
     """
-    Get the default model based on available API keys.
+    Get the default model based on available options.
     
-    Returns Claude Sonnet if ANTHROPIC_API_KEY is set,
-    otherwise falls back to OpenAI GPT-4.1.
+    Priority:
+    1. Claude API if ANTHROPIC_API_KEY is set
+    2. Claude Code CLI if available
+    3. OpenAI GPT-4.1 as fallback
     """
     if is_claude_configured():
         return CLAUDE_MODELS[ClaudeModelTier.SONNET], ModelProvider.ANTHROPIC.value
+    
+    if is_claude_code_available():
+        return CLAUDE_CODE_MODELS[ClaudeModelTier.SONNET], ModelProvider.CLAUDE_CODE.value
     
     # Fallback to OpenAI
     return "gpt-4.1", ModelProvider.OPENAI.value
