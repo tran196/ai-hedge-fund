@@ -3,6 +3,11 @@
 import json
 from pydantic import BaseModel
 from src.llm.models import get_model, get_model_info
+from src.llm.claude_config import (
+    get_claude_model_for_agent,
+    get_default_model,
+    is_claude_configured,
+)
 from src.utils.progress import progress
 from src.graph.state import AgentState
 
@@ -34,9 +39,12 @@ def call_llm(
     if state and agent_name:
         model_name, model_provider = get_agent_model_config(state, agent_name)
     else:
-        # Use system defaults when no state or agent_name is provided
-        model_name = "gpt-4.1"
-        model_provider = "OPENAI"
+        # Use Claude as default if configured, with agent-specific tier selection
+        if is_claude_configured() and agent_name:
+            model_name, model_provider = get_claude_model_for_agent(agent_name)
+        else:
+            # Fall back to configured default (Claude Sonnet if available, else OpenAI)
+            model_name, model_provider = get_default_model()
 
     # Extract API keys from state if available
     api_keys = None
@@ -125,6 +133,7 @@ def get_agent_model_config(state, agent_name):
     """
     Get model configuration for a specific agent from the state.
     Falls back to global model configuration if agent-specific config is not available.
+    When using Claude, automatically selects the appropriate tier for each agent.
     Always returns valid model_name and model_provider values.
     """
     request = state.get("metadata", {}).get("request")
@@ -136,9 +145,23 @@ def get_agent_model_config(state, agent_name):
         if model_name and model_provider:
             return model_name, model_provider.value if hasattr(model_provider, 'value') else str(model_provider)
     
-    # Fall back to global configuration (system defaults)
-    model_name = state.get("metadata", {}).get("model_name") or "gpt-4.1"
-    model_provider = state.get("metadata", {}).get("model_provider") or "OPENAI"
+    # Fall back to global configuration from metadata
+    model_name = state.get("metadata", {}).get("model_name")
+    model_provider = state.get("metadata", {}).get("model_provider")
+    
+    # If using Anthropic/Claude and we have an agent name, use tiered selection
+    if model_provider and str(model_provider).upper() in ("ANTHROPIC", "CLAUDE"):
+        return get_claude_model_for_agent(agent_name)
+    
+    # Use explicit config or fall back to defaults
+    if not model_name:
+        # Use Claude as default if configured
+        if is_claude_configured():
+            return get_claude_model_for_agent(agent_name)
+        model_name = "gpt-4.1"
+        
+    if not model_provider:
+        model_provider = "Anthropic" if is_claude_configured() else "OpenAI"
     
     # Convert enum to string if necessary
     if hasattr(model_provider, 'value'):

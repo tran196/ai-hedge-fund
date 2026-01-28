@@ -1,32 +1,7 @@
 [
   {
-    "display_name": "Grok 4",
-    "model_name": "grok-4-0709",
-    "provider": "xAI"
-  },
-  {
-    "display_name": "GPT-5",
-    "model_name": "gpt-5",
-    "provider": "OpenAI"
-  },
-  {
-    "display_name": "GPT-5 mini",
-    "model_name": "gpt-5-mini",
-    "provider": "OpenAI"
-  },
-  {
-    "display_name": "GPT-5 nano",
-    "model_name": "gpt-5-nano",
-    "provider": "OpenAI"
-  },
-  {
-    "display_name": "GPT-4o",
-    "model_name": "gpt-4o",
-    "provider": "OpenAI"
-  },
-  {
-    "display_name": "Claude Haiku 3.5",
-    "model_name": "claude-3-5-haiku-latest",
+    "display_name": "Claude Opus 4",
+    "model_name": "claude-opus-4-20250514",
     "provider": "Anthropic"
   },
   {
@@ -35,9 +10,29 @@
     "provider": "Anthropic"
   },
   {
-    "display_name": "Claude Opus 4.1",
-    "model_name": "claude-opus-4-1-20250805",
+    "display_name": "Claude Haiku 3.5",
+    "model_name": "claude-3-5-haiku-latest",
     "provider": "Anthropic"
+  },
+  {
+    "display_name": "GPT-4o",
+    "model_name": "gpt-4o",
+    "provider": "OpenAI"
+  },
+  {
+    "display_name": "GPT-4.1",
+    "model_name": "gpt-4.1",
+    "provider": "OpenAI"
+  },
+  {
+    "display_name": "GPT-4.1 mini",
+    "model_name": "gpt-4.1-mini",
+    "provider": "OpenAI"
+  },
+  {
+    "display_name": "Grok 4",
+    "model_name": "grok-4-0709",
+    "provider": "xAI"
   },
   {
     "display_name": "DeepSeek R1",
