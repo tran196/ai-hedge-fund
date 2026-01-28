@@ -261,6 +261,80 @@ class StructuredClaudeCode:
         self.base_model = base_model
         self.schema = schema
     
+    def _get_example_from_schema(self, schema: dict, defs: dict = None) -> dict:
+        """Generate an example from a JSON schema."""
+        if defs is None:
+            defs = schema.get('$defs', {})
+        
+        # Handle $ref
+        if '$ref' in schema:
+            ref_name = schema['$ref'].split('/')[-1]
+            if ref_name in defs:
+                return self._get_example_from_schema(defs[ref_name], defs)
+            return {}
+        
+        schema_type = schema.get('type', 'object')
+        
+        if schema_type == 'object':
+            example = {}
+            properties = schema.get('properties', {})
+            
+            # Handle additionalProperties (for dict types)
+            if 'additionalProperties' in schema:
+                add_props = schema['additionalProperties']
+                inner_example = self._get_example_from_schema(add_props, defs)
+                example['TICKER'] = inner_example
+                return example
+            
+            for prop_name, prop_schema in properties.items():
+                example[prop_name] = self._get_value_for_schema(prop_schema, defs)
+            return example
+        
+        return self._get_value_for_schema(schema, defs)
+    
+    def _get_value_for_schema(self, schema: dict, defs: dict) -> Any:
+        """Get an example value for a schema."""
+        # Handle $ref
+        if '$ref' in schema:
+            ref_name = schema['$ref'].split('/')[-1]
+            if ref_name in defs:
+                return self._get_example_from_schema(defs[ref_name], defs)
+            return None
+        
+        # Handle anyOf (for Optional types or Literal)
+        if 'anyOf' in schema:
+            for option in schema['anyOf']:
+                if option.get('type') != 'null':
+                    return self._get_value_for_schema(option, defs)
+            return None
+        
+        # Handle const (for Literal single values)
+        if 'const' in schema:
+            return schema['const']
+        
+        # Handle enum
+        if 'enum' in schema:
+            return schema['enum'][0]
+        
+        prop_type = schema.get('type', 'string')
+        
+        if prop_type == 'string':
+            desc = schema.get('description', '')
+            return f"<{desc[:30]}>" if desc else "<string>"
+        elif prop_type == 'integer':
+            return 50  # Use a mid-range default
+        elif prop_type == 'number':
+            return 0.0
+        elif prop_type == 'boolean':
+            return True
+        elif prop_type == 'object':
+            return self._get_example_from_schema(schema, defs)
+        elif prop_type == 'array':
+            items = schema.get('items', {})
+            return [self._get_value_for_schema(items, defs)]
+        
+        return None
+    
     def invoke(self, messages: Any, **kwargs) -> Any:
         """Invoke the model and parse the response."""
         # Add JSON instruction to the prompt
@@ -271,21 +345,32 @@ class StructuredClaudeCode:
         elif not isinstance(messages, list):
             messages = list(messages)
         
-        # Add JSON schema instruction
-        schema_info = ""
+        # Build example JSON
+        example_str = ""
         if hasattr(self.schema, 'model_json_schema'):
-            schema_info = json.dumps(self.schema.model_json_schema(), indent=2)
+            schema = self.schema.model_json_schema()
+            example = self._get_example_from_schema(schema)
+            example_str = json.dumps(example, indent=2)
         
-        json_instruction = SystemMessage(
-            content=(
-                f"You must respond with valid JSON that matches this schema:\n"
-                f"```json\n{schema_info}\n```\n"
-                f"Return ONLY the JSON object, no other text."
-            )
-        )
-        
-        # Prepend the JSON instruction
-        messages = [json_instruction] + list(messages)
+        # Add JSON instruction at the END of the last human message
+        # This is more effective than a system message
+        if messages:
+            last_msg = messages[-1]
+            if isinstance(last_msg, HumanMessage):
+                messages = messages[:-1] + [
+                    HumanMessage(content=(
+                        f"{last_msg.content}\n\n"
+                        f"RESPOND WITH ONLY VALID JSON (no other text). Use this exact format:\n"
+                        f"{example_str}"
+                    ))
+                ]
+            else:
+                messages = messages + [
+                    HumanMessage(content=(
+                        f"RESPOND WITH ONLY VALID JSON (no other text). Use this exact format:\n"
+                        f"{example_str}"
+                    ))
+                ]
         
         # Get response
         result = self.base_model._generate(messages)
@@ -299,6 +384,41 @@ class StructuredClaudeCode:
             data = json.loads(json_str)
             return self.schema(**data)
         except (json.JSONDecodeError, Exception) as e:
+            # Try to fix common issues
+            try:
+                data = json.loads(json_str)
+                
+                # Check if any required top-level field is missing
+                for field_name, field_info in self.schema.model_fields.items():
+                    if field_name not in data and isinstance(data, dict):
+                        # The model returned the inner dict without the wrapper
+                        # Try wrapping it
+                        wrapped = {field_name: data}
+                        return self.schema(**wrapped)
+                
+                # Check for field name mismatches (e.g., "rationale" instead of "reasoning")
+                field_aliases = {
+                    'rationale': 'reasoning',
+                    'reason': 'reasoning',
+                    'explanation': 'reasoning',
+                }
+                
+                def fix_field_names(obj):
+                    if isinstance(obj, dict):
+                        fixed = {}
+                        for k, v in obj.items():
+                            new_key = field_aliases.get(k, k)
+                            fixed[new_key] = fix_field_names(v)
+                        return fixed
+                    elif isinstance(obj, list):
+                        return [fix_field_names(item) for item in obj]
+                    return obj
+                
+                fixed_data = fix_field_names(data)
+                return self.schema(**fixed_data)
+                
+            except Exception as fix_error:
+                pass
             raise ValueError(f"Failed to parse response as {self.schema.__name__}: {e}\nResponse: {response_text}")
     
     def _extract_json(self, text: str) -> str:
